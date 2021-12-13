@@ -52,6 +52,11 @@ pub fn api_root(state: SharedState) -> impl Filter<Extract = (impl Reply + 'stat
         .and(super::with_state(state.clone()))
         .and(warp::filters::path::param::<Md5>())
         .and_then(view_func_by_hash);
+    let view_file_by_func = warp::get()
+        .and(warp::path("file_by_func"))
+        .and(super::with_state(state.clone()))
+        .and(warp::filters::path::param::<String>())
+        .and_then(view_file_by_func);
     let view_status = warp::get()
         .and(warp::path("status"))
         .and(super::with_state(state))
@@ -90,6 +95,23 @@ async fn view_file_by_hash(state: SharedState, md5: Md5) -> Result<impl Reply, R
 
     Result::<_, Rejection>::Ok(warp::reply::json(&v))
 }
+
+
+// GET server/api/funcs/:func_name
+async fn view_file_by_func(state: SharedState, func_name: String) -> Result<impl Reply, Rejection> {
+    let v = match state.db.get_files_by_func(&func_name).await {
+        Ok(v) => v,
+        Err(err) => {
+            error!("failed to get file by func {}: {}", &func_name, err);
+            return Ok(warp::reply::json(&Error{error: "internal server error"}));  
+        },
+    };
+
+    let files_md5: Vec<Md5> = v.into_iter().map(Md5).collect();
+
+    Result::<_, Rejection>::Ok(warp::reply::json(&files_md5))
+}
+
 
 // GET server/api/funcs/:md5
 async fn view_func_by_hash(state: SharedState, md5: Md5) -> Result<impl Reply, Rejection> {

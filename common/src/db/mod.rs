@@ -327,6 +327,27 @@ impl Database {
         })
     }
 
+    pub async fn get_files_by_func(&self, func_name: &String) -> Result<Vec<[u8; 16]>, tokio_postgres::Error> {
+        let stmt = self.prepare_cached(r#"
+        SELECT f.chksum FROM files as f
+        LEFT JOIN dbs AS d ON (d.file_id=f.id)
+        LEFT JOIN funcs as fns on (fns.db_id=d.id)
+        WHERE fns.name=$1
+        "#).await?;
+        let db = self.conn.read().await;
+        let rows = db.query(&stmt, &[&func_name]).await?;
+
+        let res = rows.into_iter()
+            .map(|row| {
+                let md5_a: Vec<u8> = row.get(0);
+                let mut md5 = [0u8; 16];
+                md5.copy_from_slice(&md5_a);
+                md5
+            })
+            .collect();
+        Ok(res)
+    }
+
     pub async fn get_file_funcs(&self, md5: &[u8], offset: i64, limit: i64) -> Result<Vec<(String, u32, [u8; 16])>, tokio_postgres::Error> {
         let stmt = self.prepare_cached(r#"
         SELECT fns.name, fns.len, fns.chksum FROM funcs AS fns
